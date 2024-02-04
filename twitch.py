@@ -71,7 +71,7 @@ class twitch(minqlx.Plugin):
 
     def handle_chat(self, player, msg, channel):
         if self.irc and self.relay and channel == "chat" and not msg.startswith("!"):
-            text = "^7[QONSOLE]<{}> ^2{}".format(player.name, msg)
+            text = "^7<{}> ^2{}".format(player.name, msg)
             self.irc.msg(self.relay, self.translate_colors(text))
 
     def handle_unload(self, plugin):
