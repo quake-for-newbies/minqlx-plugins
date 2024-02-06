@@ -27,7 +27,7 @@ class antihoag(minqlx.Plugin):
             self.winner_streak = 1
             self.winner_id = winner
         if self.winner_streak >= self.maxWinStreak:
-            self.winner_streal = 0
+            self.winner_streak = 0
             self.winner_id = 0
             for player in self.players():
                 if player.steam_id == winner:
