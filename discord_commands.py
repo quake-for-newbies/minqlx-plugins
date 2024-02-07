@@ -31,10 +31,13 @@ class discord_commands(minqlx.Plugin):
                 server_ip = self.server_ip + ":" + str(self.get_cvar("net_port"))
                 role_id = int(self.get_cvar("qlx_discord_role_id"))  
                 content = f"<@&{role_id}> | {self.strip_quake_colors(str(player))} is looking for {game_mode} on [{sv_hostname}](https://connectsteam.me/?{server_ip}) !!!"
-                requests.post("https://discordapp.com/api/channels/" +  self.discord_lfg_channel_id + "/messages",
+                req = requests.post("https://discordapp.com/api/channels/" +  self.discord_lfg_channel_id + "/messages",
                                             data=json.dumps({'content': content}),
                                             headers = {'Content-type': 'application/json', 'Authorization': 'Bot ' + self.discord_bot_token})
-                self.msg("^1Bot is summoning players from discord!")
+                if req.status_code == 200:
+                    self.msg("^1Bot is summoning players from discord!")
+                else:
+                    self.msg(f"^1Bot couldn't reach Discord, status code ^2{req.status_code}")
     def strip_quake_colors(self, nickname):
         color_pattern = re.compile('\^[\d]')
         stripped_nickname = re.sub(color_pattern, '', nickname)
