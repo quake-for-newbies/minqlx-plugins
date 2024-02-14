@@ -30,31 +30,18 @@ class twitch(minqlx.Plugin):
     def __init__(self):
         self.add_hook("chat", self.handle_chat, priority=minqlx.PRI_LOWEST)
         self.add_hook("unload", self.handle_unload)
-        self.add_hook("player_connect", self.handle_player_connect, priority=minqlx.PRI_LOWEST)
-        self.add_hook("player_disconnect", self.handle_player_disconnect, priority=minqlx.PRI_LOWEST)
-        self.add_hook("vote_started", self.handle_vote_started)
-        self.add_hook("vote_ended", self.handle_vote_ended)
-        self.add_hook("map", self.handle_map)
 
         self.set_cvar_once("qlx_ircServer", "irc.twitch.tv")
         self.set_cvar_once("qlx_ircRelayChannel", "")
         self.set_cvar_once("qlx_ircRelayIrcChat", "1")
-        self.set_cvar_once("qlx_ircIdleChannels", "")
-        self.set_cvar_once("qlx_ircNickname", "minqlx-{}".format(random.randint(1000, 9999)))
+        self.set_cvar_once("qlx_ircNickname", "")
         self.set_cvar_once("qlx_ircPassword", "")
         self.set_cvar_once("qlx_ircColors", "0")
-        self.set_cvar_once("qlx_ircQuakenetUser", "")
-        self.set_cvar_once("qlx_ircQuakenetPass", "")
-        self.set_cvar_once("qlx_ircQuakenetHidden", "0")
 
         self.server = self.get_cvar("qlx_ircServer")
         self.relay = self.get_cvar("qlx_ircRelayChannel")
-        self.idle = self.get_cvar("qlx_ircIdleChannels", list)
         self.nickname = self.get_cvar("qlx_ircNickname")
         self.password = self.get_cvar("qlx_ircPassword")
-        self.qnet = (self.get_cvar("qlx_ircQuakenetUser"),
-            self.get_cvar("qlx_ircQuakenetPass"),
-            self.get_cvar("qlx_ircQuakenetHidden", bool))
         self.is_relaying = self.get_cvar("qlx_ircRelayIrcChat", bool)
 
         self.authed = set()
@@ -65,7 +52,7 @@ class twitch(minqlx.Plugin):
         elif not self.relay and not self.idle and not self.password:
             self.logger.warning("IRC plugin loaded, but no channels or password set. Not connecting.")
         else:
-            self.irc = SimpleAsyncIrc(self.server, self.nickname, self.password, self.handle_msg, self.handle_perform, self.handle_raw)
+            self.irc = SimpleAsyncIrc(self.server, self.nickname, self.password, self.handle_msg, self.handle_perform)
             self.irc.start()
             self.logger.info("Connecting to {}...".format(self.server))
 
@@ -79,32 +66,6 @@ class twitch(minqlx.Plugin):
             self.irc.quit("Plugin unloaded!")
             self.irc.stop()
 
-    def handle_player_connect(self, player):
-        if self.irc and self.relay:
-            print(self.relay, self.translate_colors("{} connected.".format(player.name)))
-
-    def handle_player_disconnect(self, player, reason):
-        if reason and reason[-1] not in ("?", "!", "."):
-            reason = reason + "."
-        
-        if self.irc and self.relay:
-            print(self.relay, self.translate_colors("{} {}".format(player.name, reason)))
-
-    def handle_vote_started(self, caller, vote, args):
-        if self.irc and self.relay:
-            caller = caller.name if caller else "The server"
-            print(self.relay, self.translate_colors("{} called a vote: {} {}".format(caller, vote, args)))
-
-    def handle_vote_ended(self, votes, vote, args, passed):
-        if self.irc and self.relay:
-            if passed:
-                print(self.relay, self.translate_colors("Vote passed ({} - {}).".format(*votes)))
-            else:
-                print(self.relay, self.translate_colors("Vote failed."))
-
-    def handle_map(self, map, factory):
-        if self.irc and self.relay:
-            print(self.relay, self.translate_colors("Changing map to {}...".format(map)))
 
     def handle_msg(self, irc, user, channel, msg):
         if not msg:
@@ -112,61 +73,23 @@ class twitch(minqlx.Plugin):
         msg_text = " ".join(msg)
         cmd = msg[0].lower()
         if channel.lower() == self.relay.lower():
-            if cmd in (".players", ".status", ".info", ".map", ".server"):
+            if cmd == ("!server"):
                 self.server_report(self.relay)
             elif self.is_relaying:
-                if msg_text.startswith("!"):
-                    return
-                minqlx.SPECTATOR_CHAT_CHANNEL.reply("[TWITCH] ^6{}^7:^2 {}".format(user[0], " ".join(msg)))
-        elif channel == user[0]: # Is PM?
-            if len(msg) > 1 and msg[0].lower() == ".auth" and self.password:
-                if user in self.authed:
-                    irc.msg(channel, "You are already authenticated.")
-                elif msg[1] == self.password:
-                    self.authed.add(user)
-                    irc.msg(channel, "You have been successfully authenticated. You can now use .qlx to execute commands.")
-                else:
-                    # Allow up to 3 attempts for the user's IP to authenticate.
-                    if user[2] not in self.auth_attempts:
-                        self.auth_attempts[user[2]] = 3
-                    self.auth_attempts[user[2]] -= 1
-                    if self.auth_attempts[user[2]] > 0:
-                        irc.msg(channel, "Wrong password. You have {} attempts left.".format(self.auth_attempts[user[2]]))
-            elif len(msg) > 1 and user in self.authed and msg[0].lower() == ".qlx":
-                @minqlx.next_frame
-                def f():
-                    try:
-                        minqlx.COMMANDS.handle_input(IrcDummyPlayer(self.irc, user[0]), " ".join(msg[1:]), IrcChannel(self.irc, user[0]))
-                    except Exception as e:
-                        irc.msg(channel, "{}: {}".format(e.__class__.__name__, e))
-                        minqlx.log_exception()
-                f()
-
+                if not msg_text.startswith("!"):
+                    minqlx.SPECTATOR_CHAT_CHANNEL.reply("[TWITCH] ^6{}^7:^2 {}".format(user[0], " ".join(msg)))
+                    if "cyardor" in msg_text and random.choice([False, False, True]):
+                        self.irc.msg(channel, "To those that are new to the server. My name is Cyardor and I have been playing Quake for close to 1000 years. (c) Cyardor")
+                    elif "burtically" in msg_text and random.choice([False, False, True]):
+                        self.irc.msg(channel, "Thank you id Software for the freedom you give to all of us (and for fighting communism) (c) burtically")
+            else:
+                print("I hope this is the part where we have the handle chat error. twitch.py - line 86")
     def handle_perform(self, irc):
         self.logger.info("Connected to IRC!".format(self.server))
 
-        quser, qpass, qhidden = self.qnet
-        if quser and qpass and "NETWORK" in self.irc.server_options and self.irc.server_options["NETWORK"] == "QuakeNet":
-            self.logger.info("Authenticating on Quakenet as \"{}\"...".format(quser))
-            self.irc.msg("Q@CServe.quakenet.org", "AUTH {} {}".format(quser, qpass))
-            if qhidden:
-                self.irc.mode(self.irc.nickname, "+x")
-
-        for channel in self.idle:
-            irc.join(channel)
         if self.relay:
             irc.join(self.relay)
 
-    def handle_raw(self, irc, msg):
-        split_msg = msg.split()
-        if len(split_msg) > 2 and split_msg[1] == "NICK":
-            user = re_user.match(split_msg[0][1:])
-            if user and user.groups() in self.authed:
-                # Update nick if an authed user changed it.
-                self.authed.remove(user.groups())
-                self.authed.add((split_msg[2][1:], user.groups()[1], user.groups()[2]))
-        elif len(split_msg) > 1 and split_msg[1] == "433":
-            irc.nick(irc.nickname + "_")
 
     @classmethod
     def translate_colors(cls, text):
@@ -196,7 +119,7 @@ class twitch(minqlx.Plugin):
                 plist.append("\x0302Blue\x03: " + ", ".join([p.clean_name for p in teams["blue"]]))
             elif t == "spectator":
                 plist.append("\x02Spec\x02: " + ", ".join([p.clean_name for p in teams["spectator"]]))
-                
+
 
         # Info about the game state.
         if game.state == "in_progress":
@@ -235,7 +158,7 @@ class IrcDummyPlayer(minqlx.AbstractDummyPlayer):
         self.irc = irc
         self.user = user
         super().__init__(name="IRC-{}".format(irc.nickname))
-    
+
     @property
     def steam_id(self):
         return minqlx.owner()
@@ -256,7 +179,7 @@ re_msg = re.compile(r"^:([^ ]+) PRIVMSG ([^ ]+) :(.*)$")
 re_user = re.compile(r"^(.+)!(.+)@(.+)$")
 
 class SimpleAsyncIrc(threading.Thread):
-    def __init__(self, address, nickname, ircPassword, msg_handler, perform_handler, raw_handler=None, stop_event=threading.Event()):
+    def __init__(self, address, nickname, ircPassword, msg_handler, perform_handler, stop_event=threading.Event()):
         split_addr = address.split(":")
         self.host = split_addr[0]
         self.port = int(split_addr[1]) if len(split_addr) > 1 else 6667
@@ -264,7 +187,7 @@ class SimpleAsyncIrc(threading.Thread):
         self.ircPassword = ircPassword
         self.msg_handler = msg_handler
         self.perform_handler = perform_handler
-        self.raw_handler = raw_handler
+
         self.stop_event = stop_event
         self.reader = None
         self.writer = None
@@ -283,7 +206,7 @@ class SimpleAsyncIrc(threading.Thread):
                 loop.run_until_complete(self.connect())
             except Exception:
                 minqlx.log_exception()
-            
+
             # Disconnected. Try reconnecting in 30 seconds.
             logger.info("Disconnected from IRC. Reconnecting in 30 seconds...")
             time.sleep(30)
@@ -301,7 +224,7 @@ class SimpleAsyncIrc(threading.Thread):
     def connect(self):
         self.reader, self.writer = yield from asyncio.open_connection(self.host, self.port)
         self.write("CAP REQ :twitch.tv/commands\r\nPASS {}\r\nNICK {}\r\n".format(self.ircPassword, self.nickname))
-        
+
         while not self.stop_event.is_set():
             line = yield from self.reader.readline()
             if not line:
@@ -340,9 +263,6 @@ class SimpleAsyncIrc(threading.Thread):
         elif re.match(r":[^ ]+ (376|422) .+", msg):
             self.perform_handler(self)
 
-        # If we have a raw handler, let it do its stuff now.
-        if self.raw_handler:
-            self.raw_handler(self, msg)
 
     def msg(self, recipient, msg):
         self.write("PRIVMSG {} :{}\r\n".format(recipient, msg))
@@ -356,17 +276,7 @@ class SimpleAsyncIrc(threading.Thread):
     def join(self, channels):
         self.write("JOIN {}\r\n".format(channels))
 
-    def part(self, channels):
-        self.write("PART {}\r\n".format(channels))
-
-    def mode(self, what, mode):
-        self.write("MODE {} {}\r\n".format(what, mode))
-
-    def kick(self, channel, nick, reason):
-        self.write("KICK {} {}:{}\r\n".format(channel, nick, reason))
-
-    def quit(self, reason):
-        self.write("QUIT :{}\r\n".format(reason))
-
     def pong(self, n):
         self.write("PONG :{}\r\n".format(n))
+    def quit(self, reason):
+        self.write("QUIT :{}\r\n".format(reason))
