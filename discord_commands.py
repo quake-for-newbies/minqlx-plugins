@@ -28,7 +28,6 @@ class discord_commands(minqlx.Plugin):
 
         self.add_hook("chat", self.handle_chat)
 
-    @minqlx.thread
     def handle_chat(self, player, msg, channel):
         if self.discord_lfg_channel_id:
             if msg == "!promote":
