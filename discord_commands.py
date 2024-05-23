@@ -41,7 +41,8 @@ class discord_commands(minqlx.Plugin):
                         sv_hostname = self.sv_hostname
                         server_ip = self.server_ip + ":" + str(self.get_cvar("net_port"))
                         role_id = int(self.get_cvar("qlx_discord_role_id"))
-                        content = f"<@&{role_id}> | {self.strip_quake_colors(str(player))} is looking for {game_mode} on [{sv_hostname}](https://connectsteam.me/?{server_ip}) !!!"
+                        target_elo = self.fetch(player)
+                        content = f"<@&{role_id}> | {self.strip_quake_colors(str(player))} (ELO : {target_elo['elo']}, {target_elo['games']} games) is looking for {game_mode} on [{sv_hostname}](https://connectsteam.me/?{server_ip}) !!!"
                         req = requests.post("https://discordapp.com/api/channels/" +  self.discord_lfg_channel_id + "/messages",
                                                     data=json.dumps({'content': content}),
                                                     headers={'Content-type': 'application/json', 'Authorization': 'Bot ' + self.discord_bot_token})
@@ -60,3 +61,44 @@ class discord_commands(minqlx.Plugin):
         stripped_nickname = re.sub(color_pattern, '', nickname)
 
         return stripped_nickname
+        
+    def fetch(self, player):
+        gt = self.game.type_short
+        try:
+            sid = player.steam_id
+        except:
+            sid = player
+
+        attempts = 0
+        last_status = 0
+        while attempts < 3:
+            attempts += 1
+            url = "http://qlstats.net/{elo}/{}".format(sid, elo=self.get_cvar('qlx_balanceApi'))
+            res = requests.get(url)
+            last_status = res.status_code
+            if res.status_code != requests.codes.ok:
+                continue
+
+            js = res.json()
+            if "players" not in js:
+                last_status = -1
+                continue
+
+            for p in js["players"]:
+                _sid = int(p["steamid"])
+                if _sid == sid: # got our player
+                    if gt not in p:
+                        print("echo No {} rating for {}".format(gt, _sid))
+                        print("no stats")
+
+                    _gt = p[gt]
+                    return _gt
+
+            # If our players has not been found yet, then he is not known in the system
+            _gt['elo'] = 0
+            _gt['games'] = 0
+            return _gt
+
+
+        self.msg("^1echo Problem fetching {} glicko: {}".format(gt, last_status))
+        return
