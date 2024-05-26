@@ -60,7 +60,7 @@ class twitch(minqlx.Plugin):
         if self.irc and self.relay and channel == "chat" and not msg.startswith("!"):
             text = "^7<{}> ^2{}".format(player.name, msg)
             self.irc.msg(self.relay, self.translate_colors(text))
-
+            
     def handle_unload(self, plugin):
         if plugin == self.__class__.__name__ and self.irc and self.irc.is_alive():
             self.irc.quit("Plugin unloaded!")
@@ -82,11 +82,9 @@ class twitch(minqlx.Plugin):
                         self.irc.msg(channel, "To those that are new to the server. My name is Cyardor and I have been playing Quake for close to 1000 years. (c) Cyardor")
                     elif "burtically" in msg_text and random.choice([False, False, True]):
                         self.irc.msg(channel, "Thank you id Software for the freedom you give to all of us (and for fighting communism) (c) burtically")
-            else:
-                print("I hope this is the part where we have the handle chat error. twitch.py - line 86")
     def handle_perform(self, irc):
         self.logger.info("Connected to IRC!".format(self.server))
-
+        
         if self.relay:
             irc.join(self.relay)
 
@@ -112,14 +110,14 @@ class twitch(minqlx.Plugin):
             if not teams[t]:
                 continue
             elif t == "free":
-                plist.append("Free: " + ", ".join([p.clean_name for p in teams["free"]]))
+                plist.append("Playing : " + ", ".join([p.clean_name for p in teams["free"]]))
             elif t == "red":
                 plist.append("\x0304Red\x03: " + ", ".join([p.clean_name for p in teams["red"]]))
             elif t == "blue":
                 plist.append("\x0302Blue\x03: " + ", ".join([p.clean_name for p in teams["blue"]]))
             elif t == "spectator":
                 plist.append("\x02Spec\x02: " + ", ".join([p.clean_name for p in teams["spectator"]]))
-
+                
 
         # Info about the game state.
         if game.state == "in_progress":
@@ -158,7 +156,7 @@ class IrcDummyPlayer(minqlx.AbstractDummyPlayer):
         self.irc = irc
         self.user = user
         super().__init__(name="IRC-{}".format(irc.nickname))
-
+    
     @property
     def steam_id(self):
         return minqlx.owner()
@@ -206,7 +204,7 @@ class SimpleAsyncIrc(threading.Thread):
                 loop.run_until_complete(self.connect())
             except Exception:
                 minqlx.log_exception()
-
+            
             # Disconnected. Try reconnecting in 30 seconds.
             logger.info("Disconnected from IRC. Reconnecting in 30 seconds...")
             time.sleep(30)
@@ -224,7 +222,7 @@ class SimpleAsyncIrc(threading.Thread):
     def connect(self):
         self.reader, self.writer = yield from asyncio.open_connection(self.host, self.port)
         self.write("CAP REQ :twitch.tv/commands\r\nPASS {}\r\nNICK {}\r\n".format(self.ircPassword, self.nickname))
-
+        
         while not self.stop_event.is_set():
             line = yield from self.reader.readline()
             if not line:
